@@ -28,11 +28,14 @@ public class VideoCreation {
         if (!Directory.Exists(VidcutterModule.Settings.VideoFolder)) {
             return videos;
         }
-        string[] allVideos = Directory.GetFiles(VidcutterModule.Settings.VideoFolder);
+        string[] videoExtensions = { ".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".ts" };
+        string[] allVideos = Directory.GetFiles(VidcutterModule.Settings.VideoFolder)
+            .Where(f => videoExtensions.Contains(Path.GetExtension(f).ToLower()))
+            .ToArray();
         foreach (string video in allVideos) {
             DateTime videoTime = File.GetCreationTime(video);
-            videoTime += TimeSpan.FromHours(5); // Hacky stuff to not use ffprobe but still giving leeway
-            if (videoTime >= firstLog) {
+            // Allow videos started up to 12 hours before the first log entry
+            if (videoTime >= firstLog - TimeSpan.FromHours(12)) {
                 videos.Add(video);
             }
         }
@@ -68,7 +71,7 @@ public class VideoCreation {
         process.WaitForExit();
         if (!double.TryParse(strDuration, out double durationDouble) || durationDouble <= 0) {
             isFinished = false;
-            return new[] { ".mkv", ".flv", ".ts" }.Contains(Path.GetExtension(video).ToLower())
+            return new[] { ".mp4", ".mkv", ".flv", ".ts", ".mov", ".avi", ".webm" }.Contains(Path.GetExtension(video).ToLower())
                 ? File.GetLastWriteTime(video) - File.GetCreationTime(video) + TimeSpan.FromSeconds(3) // Give time to make sure end of video is good
                 : null;
         }

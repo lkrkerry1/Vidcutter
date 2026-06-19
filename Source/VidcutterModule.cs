@@ -38,6 +38,7 @@ public class VidcutterModule : EverestModule {
 
     public static string logPath;
     public static StreamWriter LogFileWriter = null;
+    private static readonly object LogFileLock = new();
 
     public static Vector2? previousRespawnPoint = null;
     public static bool processWhenClose = false;
@@ -71,7 +72,9 @@ public class VidcutterModule : EverestModule {
             toLog += $" | {session.Level.Replace("|", "-")} | ";
         }
         toLog += message + $" | {!inState}";
-        LogFileWriter.WriteLine(toLog);
+        lock (LogFileLock) {
+            LogFileWriter.WriteLine(toLog);
+        }
     }
 
     public static List<LoggedString> getAllLogs(string video, string level = null) {
@@ -86,8 +89,14 @@ public class VidcutterModule : EverestModule {
     }
 
     public static List<LoggedString> getAllLogs(DateTime? startVideo = null, DateTime? endVideo = null, string level = null) {
-        LogFileWriter.Close();
-        string[] lines = File.ReadAllLines(logPath);
+        string[] lines;
+        lock (LogFileLock) {
+            LogFileWriter.Close();
+            lines = File.ReadAllLines(logPath);
+            LogFileWriter = new StreamWriter(logPath, true) {
+                AutoFlush = true
+            };
+        }
         List<LoggedString> parsedLines = new List<LoggedString>();
         foreach (string line in lines) {
             DateTime logTime = DateTime.Parse(line.Substring(1, 23));
@@ -106,9 +115,6 @@ public class VidcutterModule : EverestModule {
                 parsedLines.Add(new LoggedString(logTime, loggedEvent[2], loggedEvent[0], loggedEvent[1], loggedEvent.ElementAtOrDefault(3)));        }
         }
 
-        LogFileWriter = new StreamWriter(logPath, true) {
-            AutoFlush = true
-        };
         return parsedLines;
     }
 
@@ -367,14 +373,16 @@ public class VidcutterModule : EverestModule {
             }
         }
 
-        LogFileWriter.Close();
-        using (StreamWriter writer = new StreamWriter(logPath, false)) {
-            foreach (LoggedString log in allLogs) {
-                writer.WriteLine(log.ToString());
+        lock (LogFileLock) {
+            LogFileWriter.Close();
+            using (StreamWriter writer = new StreamWriter(logPath, false)) {
+                foreach (LoggedString log in allLogs) {
+                    writer.WriteLine(log.ToString());
+                }
             }
+            LogFileWriter = new StreamWriter(logPath, true) {
+                AutoFlush = true
+            };
         }
-        LogFileWriter = new StreamWriter(logPath, true) {
-            AutoFlush = true
-        };
     }
 }
